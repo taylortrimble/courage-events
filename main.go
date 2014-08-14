@@ -3,6 +3,7 @@ package main
 import (
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/thenewtricks/courage-service/binmsg"
+	"github.com/thenewtricks/courage-service/binrt"
 	"github.com/thenewtricks/courage-service/tcp"
 	"log"
 )
@@ -17,20 +18,20 @@ type RealtimeClient struct {
 
 func (rc *RealtimeClient) ServeTCPConnect(mwch chan binmsg.MessageWriter) {
 	// Create the subscribe request payload.
-	subscribeRequest := &TCPSubscribeRequest{rc.username, rc.password, rc.providerID, rc.channelID, rc.deviceID, 0}
+	subscribeRequest := &binrt.Request{rc.username, rc.password, rc.providerID, rc.channelID, rc.deviceID, 0}
 
 	// Get the message writer when it's ready.
 	mw := <-mwch
 
 	// Write the subscribe request header.
-	err := mw.WriteHeader(TCPProtocolIDSubscribe, TCPMessageTypeSubscribeRequest)
+	err := mw.WriteHeader(binrt.ProtocolIDSubscribe, binrt.MessageTypeRequest)
 	if err != nil {
 		log.Println("failed to write message header:", err)
 		return
 	}
 
 	// Write the subscribe request payload.
-	err = WriteTCPSubscribeRequest(mw, subscribeRequest)
+	err = binrt.WriteRequest(mw, subscribeRequest)
 	if err != nil {
 		log.Println("failed to write subscribe request:", err)
 		return
@@ -52,8 +53,8 @@ func (rc *RealtimeClient) ServeTCP(mwch chan binmsg.MessageWriter, mr binmsg.Mes
 	_, messageType := mr.Header()
 
 	switch messageType {
-	case TCPMessageTypeSubscribeOKResponse:
-		ok, err := ReadTCPSubscribeOKResponse(mr)
+	case binrt.MessageTypeOKResponse:
+		ok, err := binrt.ReadOKResponse(mr)
 		if err != nil {
 			log.Println("failed to read ok response:", err)
 			return
@@ -61,8 +62,8 @@ func (rc *RealtimeClient) ServeTCP(mwch chan binmsg.MessageWriter, mr binmsg.Mes
 
 		log.Println("[OK] ok response:", ok.ChannelID)
 
-	case TCPMessageTypeSubscribeErrorResponse:
-		e, err := ReadTCPSubscribeErrorResponse(mr)
+	case binrt.MessageTypeErrorResponse:
+		e, err := binrt.ReadErrorResponse(mr)
 		if err != nil {
 			log.Println("failed to read error response:", err)
 			return
@@ -70,8 +71,8 @@ func (rc *RealtimeClient) ServeTCP(mwch chan binmsg.MessageWriter, mr binmsg.Mes
 
 		log.Println("[ER] error response:", e.ChannelID, e.ErrorCode)
 
-	case TCPMessageTypeSubscribeStreamingResponse:
-		resp, err := ReadTCPSubscribeStreamingResponse(mr)
+	case binrt.MessageTypeStreamingResponse:
+		resp, err := binrt.ReadStreamingResponse(mr)
 		if err != nil {
 			log.Println("failed to read streaming reponse:", err)
 			return
@@ -93,7 +94,7 @@ func main() {
 
 	peer := binmsg.NewPeer()
 	peer.HandleConnect(rc)
-	peer.Handle(TCPProtocolIDSubscribe, rc)
+	peer.Handle(binrt.ProtocolIDSubscribe, rc)
 
 	err := tcp.Dial("localhost:2874", peer)
 	if err != nil {
